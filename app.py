@@ -168,11 +168,15 @@ if menu == "Inicio / Contexto":
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.image(
-            "img/logo_akira.jpg",
-            caption="Akira Sistemas – Ciencia de Datos e Inteligencia Artificial",
-            use_container_width=True
-        )
+        st.markdown(
+            """
+            <h1 style='text-align:center;'>Akira Sistemas</h1>
+            <h3 style='text-align:center; color:gray;'>
+            Ciencia de Datos e Inteligencia Artificial
+            </h3>
+            """,
+        unsafe_allow_html=True
+)
 
     st.divider()
 
