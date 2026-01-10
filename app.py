@@ -67,7 +67,7 @@ def preparar_dataset_modelo(df):
     df["dias_a_vencer"] = (df["fecha_fin"] - hoy).dt.days
     df["antiguedad_meses"] = ((hoy - df["fecha_inicio"]).dt.days / 30).round(1)
 
-    # 🔑 DATASET A NIVEL CLIENTE
+    # 📌 DATASET A NIVEL CLIENTE
     df_cliente = (
         df.groupby("cliente_id")
         .agg(
@@ -75,11 +75,12 @@ def preparar_dataset_modelo(df):
             antiguedad_meses=("antiguedad_meses", "max"),
             precio_promedio=("precio_unitario", "mean"),
             dispositivos=("dispositivos", "sum"),
-            tiene_vigente=("estado_suscripcion", lambda x: any(x == "Vigente"))
+            tiene_vigente=("suscripcion_vigente", "any")
         )
         .reset_index()
     )
 
+    # ✅ Definición correcta de churn (SIN fuga de información)
     df_cliente["churn"] = (~df_cliente["tiene_vigente"]).astype(int)
 
     X = df_cliente[
