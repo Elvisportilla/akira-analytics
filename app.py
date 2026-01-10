@@ -897,12 +897,22 @@ elif menu == "Análisis de Riesgo":
     # =============================
     st.subheader("📊 Distribución de clientes por nivel de riesgo")
 
-    riesgo_dist = (
-        df_riesgo.groupby("nivel_riesgo")["cliente_id"]
-        .nunique()
-        .reset_index(name="clientes")
+    clientes_riesgo = (
+        df.groupby("cliente_id")
+        .agg(
+            riesgo_max=("orden_riesgo", "min")
+        )
+        .reset_index()
     )
 
+    riesgo_dist = (
+        clientes_riesgo["riesgo_max"]
+        .map({1: "Alto", 2: "Medio", 3: "Bajo"})
+        .value_counts()
+        .reset_index()
+    )
+
+    riesgo_dist.columns = ["nivel_riesgo", "clientes"]
     fig_riesgo = px.pie(
         riesgo_dist,
         names="nivel_riesgo",
