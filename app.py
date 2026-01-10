@@ -67,7 +67,7 @@ def preparar_dataset_modelo(df):
     df["dias_a_vencer"] = (df["fecha_fin"] - hoy).dt.days
     df["antiguedad_meses"] = ((hoy - df["fecha_inicio"]).dt.days / 30).round(1)
 
-    # 📌 DATASET A NIVEL CLIENTE
+    # 🔑 DATASET A NIVEL CLIENTE
     df_cliente = (
         df.groupby("cliente_id")
         .agg(
@@ -75,13 +75,14 @@ def preparar_dataset_modelo(df):
             antiguedad_meses=("antiguedad_meses", "max"),
             precio_promedio=("precio_unitario", "mean"),
             dispositivos=("dispositivos", "sum"),
-            tiene_vigente=("suscripcion_vigente", "any")
+            tiene_vigente=("estado_analitico", lambda x: any(x.isin(["Activo", "Por vencer"]))),
+            churn=("estado_analitico", lambda x: all(x.isin(["Vencido", "Inactivo"])))
         )
         .reset_index()
     )
 
-    # ✅ Definición correcta de churn (SIN fuga de información)
-    df_cliente["churn"] = (~df_cliente["tiene_vigente"]).astype(int)
+    # Variable objetivo CORRECTA
+    df_cliente["churn"] = df_cliente["churn"].astype(int)
 
     X = df_cliente[
         ["dias_a_vencer_min", "antiguedad_meses", "precio_promedio", "dispositivos"]
@@ -95,23 +96,38 @@ def preparar_dataset_modelo(df):
 
 
 
-def calcular_estado_suscripcion(df, hoy):
+def calcular_estado_analitico(df, hoy):
     df = df.copy()
 
+    # Días relativos
     df["dias_a_vencer"] = (df["fecha_fin"] - hoy).dt.days
+    df["dias_post_vencimiento"] = (hoy - df["fecha_fin"]).dt.days
 
-    df["estado_suscripcion"] = np.select(
-        [
-            (df["dias_a_vencer"] >= 0) & (df["dias_a_vencer"] <= 3),
-            (df["fecha_fin"] >= hoy),
-            (df["fecha_fin"] < hoy)
-        ],
-        [
-            "Por vencer",
-            "Vigente",
-            "No vigente"
-        ],
-        default="No vigente"
+    condiciones = [
+        # 1️⃣ Activo: dentro del periodo contractual
+        (df["fecha_inicio"] <= hoy) & (df["fecha_fin"] >= hoy),
+
+        # 2️⃣ Por vencer: faltan entre 0 y 3 días
+        (df["dias_a_vencer"] >= 0) & (df["dias_a_vencer"] <= 3),
+
+        # 3️⃣ Vencido: 1 a 5 días después del fin
+        (df["dias_post_vencimiento"] >= 1) & (df["dias_post_vencimiento"] <= 5),
+
+        # 4️⃣ Inactivo: más de 5 días vencido
+        (df["dias_post_vencimiento"] > 5)
+    ]
+
+    estados = [
+        "Activo",
+        "Por vencer",
+        "Vencido",
+        "Inactivo"
+    ]
+
+    df["estado_analitico"] = np.select(
+        condiciones,
+        estados,
+        default="Inactivo"
     )
 
     return df
@@ -257,7 +273,7 @@ elif menu == "Visión General de Clientes":
 
     df = st.session_state.df.copy()
     hoy = pd.Timestamp.today().normalize()
-    df = calcular_estado_suscripcion(df, hoy)
+    df = calcular_estado_analitico(df, hoy)
 
 
     df["suscripcion_vigente"] = (
@@ -766,7 +782,7 @@ elif menu == "Análisis de Riesgo":
 
     df = st.session_state.df.copy()
     hoy = pd.Timestamp.today().normalize()
-    df = calcular_estado_suscripcion(df, hoy)
+    df = calcular_estado_analitico(df, hoy)
 
     # 🔑 CLAVE ABSOLUTA
     
@@ -999,7 +1015,7 @@ elif menu == "Predicción de Deserción (IA)":
     # =============================
     df = st.session_state.df.copy()
     hoy = pd.Timestamp.today().normalize()
-    df = calcular_estado_suscripcion(df, hoy)
+    df = calcular_estado_analitico(df, hoy)
 
     df["dias_a_vencer"] = (df["fecha_fin"] - hoy).dt.days
     df["antiguedad_meses"] = ((hoy - df["fecha_inicio"]).dt.days / 30).round(1)
@@ -1106,31 +1122,6 @@ elif menu == "Predicción de Deserción (IA)":
                 dispositivos=("dispositivos", "sum")
             )
         )
-
-
-
-
-        # =============================
-        # 📌 RESUMEN CONTRACTUAL DEL CLIENTE
-        # =============================
-        st.subheader("📌 Resumen contractual del cliente")
-
-        resumen = (
-            df_pred
-            .groupby("estado_suscripcion")
-            .size()
-            .reset_index(name="Cantidad")
-        )
-
-        st.dataframe(resumen, use_container_width=True)
-
-        st.caption(
-            "El cliente puede tener múltiples suscripciones. "
-            "El modelo evalúa el riesgo considerando si existe al menos una suscripción vigente."
-        )
-
-
-
 
         X_cliente_scaled = scaler.transform(df_cliente)
         prob = modelo.predict_proba(X_cliente_scaled)[0][1]
