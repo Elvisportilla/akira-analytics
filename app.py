@@ -871,10 +871,18 @@ elif menu == "Análisis de Riesgo":
     # =============================
     # KPIs DE RIESGO
     # =============================
-    total = df_riesgo["cliente_id"].nunique()
-    alto = df_riesgo[df_riesgo["nivel_riesgo"] == "Alto"]["cliente_id"].nunique()
-    medio = df_riesgo[df_riesgo["nivel_riesgo"] == "Medio"]["cliente_id"].nunique()
-    bajo = df_riesgo[df_riesgo["nivel_riesgo"] == "Bajo"]["cliente_id"].nunique()
+    clientes_riesgo = (
+    df.groupby("cliente_id")
+    .agg(
+        riesgo_max=("orden_riesgo", "min")
+    )
+    .reset_index()
+    )
+
+    total = clientes_riesgo["cliente_id"].nunique()
+    alto = (clientes_riesgo["riesgo_max"] == 1).sum()
+    medio = (clientes_riesgo["riesgo_max"] == 2).sum()
+    bajo = (clientes_riesgo["riesgo_max"] == 3).sum()
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Clientes evaluados", total)
